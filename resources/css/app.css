@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gradient-brand: linear-gradient(135deg, #2563EB 0%, #06B6D4 100%);
+  --gradient-brand-deep: linear-gradient(135deg, #1E3A8A 0%, #2563EB 55%, #06B6D4 100%);
+  --gradient-glow: radial-gradient(60% 60% at 50% 0%, rgba(37, 99, 235, 0.18) 0%, rgba(255, 255, 255, 0) 100%);
+  --gradient-progress: linear-gradient(90deg, #2563EB 0%, #06B6D4 100%);
+}
+
+@layer components {
+  /* ======================================================== */
+  /* 1. BUTTON DESIGN SYSTEM (PRIMARY, SECONDARY, DANGER, ETC) */
+  /* ======================================================== */
+
+  /* Button Primary: High Contrast SIMPRO Deep Blue */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-[#1E3A8A] text-white hover:bg-blue-900 border-2 border-[#1E3A8A] shadow-md hover:shadow-lg active:scale-[0.98] transition cursor-pointer select-none focus:outline-none focus:ring-4 focus:ring-blue-300;
+  }
+
+  /* Button Secondary: Crisp White with Defined Border & Dark Text */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-white text-slate-700 hover:text-[#1E3A8A] hover:bg-blue-50/80 border-2 border-slate-300 hover:border-blue-400 shadow-sm hover:shadow active:scale-[0.98] transition cursor-pointer select-none focus:outline-none focus:ring-4 focus:ring-slate-200;
+  }
+
+  /* Button Success: Solid Emerald Green for Deal / Conversion */
+  .btn-success {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 border-2 border-emerald-600 shadow-md hover:shadow-lg active:scale-[0.98] transition cursor-pointer select-none focus:outline-none focus:ring-4 focus:ring-emerald-300;
+  }
+
+  /* Button Danger: Solid High-Visibility Red */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-red-600 text-white hover:bg-red-700 border-2 border-red-600 shadow-sm hover:shadow-md active:scale-[0.98] transition cursor-pointer select-none focus:outline-none focus:ring-4 focus:ring-red-200;
+  }
+
+  /* Button Ghost / Flat */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-slate-700 hover:text-[#1E3A8A] hover:bg-blue-50 transition cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-blue-200;
+  }
+
+  /* ======================================================== */
+  /* 2. TAB & SEGMENTED CONTROLS (ACTIVE VS INACTIVE)         */
+  /* ======================================================== */
+
+  /* Tab Active: Deep Blue with Solid Background & White Text */
+  .btn-tab-active {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm bg-[#1E3A8A] text-white border-2 border-[#1E3A8A] shadow-md transition cursor-pointer select-none;
+  }
+
+  /* Tab Inactive: Clean White with Crisp Dark Text & Border */
+  .btn-tab-inactive {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-white text-slate-700 border-2 border-slate-300 hover:border-blue-400 hover:bg-blue-50/90 hover:text-[#1E3A8A] shadow-sm transition cursor-pointer select-none;
+  }
+
+  /* Toggle Pill Active */
+  .toggle-btn-active {
+    @apply flex items-center justify-center gap-2 rounded-xl py-3 px-4 font-bold text-sm bg-[#1E3A8A] text-white border-2 border-[#1E3A8A] shadow-md transition cursor-pointer select-none;
+  }
+
+  /* Toggle Pill Inactive */
+  .toggle-btn-inactive {
+    @apply flex items-center justify-center gap-2 rounded-xl py-3 px-4 font-semibold text-sm bg-white text-slate-700 border-2 border-slate-300 hover:border-blue-400 hover:bg-blue-50/80 hover:text-[#1E3A8A] shadow-sm transition cursor-pointer select-none;
+  }
+
+  /* ======================================================== */
+  /* 3. SIDEBAR NAVIGATION CONTROLS                          */
+  /* ======================================================== */
+
+  .sidebar-item-active {
+    @apply flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold bg-blue-50 text-[#1E3A8A] border-l-4 border-[#1E3A8A] shadow-sm transition;
+  }
+
+  .sidebar-item-inactive {
+    @apply flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 transition;
+  }
+
+  /* ======================================================== */
+  /* 4. FORM INPUTS & SELECTS (HIGH CONTRAST & VISIBLE FOCUS) */
+  /* ======================================================== */
+
+  .form-control-input {
+    @apply h-11 w-full rounded-xl border-2 border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-[#1E3A8A] focus:ring-2 focus:ring-blue-100 focus:outline-none transition;
+  }
+
+  /* ======================================================== */
+  /* 5. STATUS BADGES & CHIPS                                */
+  /* ======================================================== */
+
+  .badge-chip-baru {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-slate-100 text-slate-800 border-2 border-slate-300 shadow-sm;
+  }
+
+  .badge-chip-followup {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-blue-50 text-blue-900 border-2 border-blue-300 shadow-sm;
+  }
+
+  .badge-chip-hot {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-amber-50 text-amber-900 border-2 border-amber-400 shadow-sm;
+  }
+
+  .badge-chip-deal {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-emerald-50 text-emerald-900 border-2 border-emerald-400 shadow-sm;
+  }
+
+  .badge-chip-batal {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-rose-50 text-rose-900 border-2 border-rose-300 shadow-sm;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
