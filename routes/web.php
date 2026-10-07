@@ -85,6 +85,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/master/statuses', [ProspectStatusController::class, 'index'])->name('master.statuses.index');
         Route::post('/master/statuses', [ProspectStatusController::class, 'store'])->name('master.statuses.store');
         Route::put('/master/statuses/{status}', [ProspectStatusController::class, 'update'])->name('master.statuses.update');
+        Route::delete('/master/statuses/{status}', [ProspectStatusController::class, 'destroy'])->name('master.statuses.destroy');
 
         // User Management
         Route::get('/users', [UserController::class, 'index'])->name('users.index');

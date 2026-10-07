@@ -4,61 +4,21 @@
 @section('page-title', 'Kelola Akun Pengguna')
 
 @section('content')
-<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-
-    <!-- Add Form -->
-    <div class="rounded-xl bg-surface p-6 border border-hairline shadow-elev-1 lg:col-span-1 h-fit">
-        <h2 class="text-heading-md font-semibold text-ink mb-2">Tambah Pengguna Baru</h2>
-        <p class="text-caption text-mute mb-5">Daftarkan akun Admin atau Sales penanggung jawab prospek.</p>
-
-        <form action="{{ route('users.store') }}" method="POST" class="space-y-4">
-            @csrf
-            <div>
-                <label for="name" class="mb-xs block text-body-sm font-medium text-ink">Nama Lengkap <span class="text-error">*</span></label>
-                <input id="name" name="name" type="text" value="{{ old('name') }}" required
-                       placeholder="Contoh: Rian Pratama"
-                       class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
-            </div>
-
-            <div>
-                <label for="email" class="mb-xs block text-body-sm font-medium text-ink">Alamat Email (Username) <span class="text-error">*</span></label>
-                <input id="email" name="email" type="email" value="{{ old('email') }}" required
-                       placeholder="rian@simpro.com"
-                       class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
-            </div>
-
-            <div>
-                <label for="password" class="mb-xs block text-body-sm font-medium text-ink">Kata Sandi <span class="text-error">*</span></label>
-                <input id="password" name="password" type="password" required
-                       placeholder="Minimal 6 karakter"
-                       class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
-            </div>
-
-            <div>
-                <label for="role" class="mb-xs block text-body-sm font-medium text-ink">Peran (Role) <span class="text-error">*</span></label>
-                <select id="role" name="role" required
-                        class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
-                    <option value="sales">Sales (Pengelola & Follow-up Prospek)</option>
-                    <option value="admin">Admin (Monitoring & Master Data)</option>
-                </select>
-            </div>
-
-            <button type="submit" class="btn-primary w-full">
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Daftarkan Pengguna
-            </button>
-        </form>
-    </div>
+<div class="space-y-6">
 
     <!-- Users List -->
-    <div class="rounded-xl bg-surface border border-hairline shadow-elev-1 lg:col-span-2 overflow-hidden">
+    <div class="rounded-xl bg-surface border border-hairline shadow-elev-1 overflow-hidden">
         <div class="p-5 border-b border-hairline flex items-center justify-between">
             <div>
                 <h2 class="text-heading-md font-semibold text-ink">Daftar Akun Pengguna</h2>
                 <p class="text-caption text-mute">Total {{ $users->count() }} akun terdaftar</p>
             </div>
+            <button type="button" onclick="openCreateUserModal()" class="btn-primary">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span>Tambah Pengguna</span>
+            </button>
         </div>
 
         <div class="overflow-x-auto">
@@ -148,6 +108,66 @@
     </div>
 </div>
 
+<!-- Create User Modal Dialog -->
+<div id="createUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm hidden">
+    <div class="w-full max-w-md rounded-2xl bg-surface p-6 shadow-elev-4 border border-hairline transition-all">
+        <div class="flex items-center justify-between border-b border-hairline pb-4 mb-4">
+            <div>
+                <h3 class="text-heading-md font-bold text-ink">Tambah Pengguna Baru</h3>
+                <p class="text-caption text-mute mt-1">Daftarkan akun Admin atau Sales penanggung jawab prospek.</p>
+            </div>
+            <button type="button" onclick="closeCreateUserModal()" class="text-mute hover:text-ink">
+                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
+            </button>
+        </div>
+
+        <form action="{{ route('users.store') }}" method="POST" class="space-y-4">
+            @csrf
+            <div>
+                <label for="name" class="mb-xs block text-body-sm font-medium text-ink">Nama Lengkap <span class="text-error">*</span></label>
+                <input id="name" name="name" type="text" value="{{ old('name') }}" required
+                       placeholder="Contoh: Rian Pratama"
+                       class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
+            </div>
+
+            <div>
+                <label for="email" class="mb-xs block text-body-sm font-medium text-ink">Alamat Email (Username) <span class="text-error">*</span></label>
+                <input id="email" name="email" type="email" value="{{ old('email') }}" required
+                       placeholder="rian@simpro.com"
+                       class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
+            </div>
+
+            <div>
+                <label for="password" class="mb-xs block text-body-sm font-medium text-ink">Kata Sandi <span class="text-error">*</span></label>
+                <input id="password" name="password" type="password" required
+                       placeholder="Minimal 6 karakter"
+                       class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
+            </div>
+
+            <div>
+                <label for="role" class="mb-xs block text-body-sm font-medium text-ink">Peran (Role) <span class="text-error">*</span></label>
+                <select id="role" name="role" required
+                        class="h-10 w-full rounded-md border border-hairline-strong bg-surface px-3 text-body-sm text-ink focus:border-primary focus:shadow-focus focus:outline-none focus:ring-0">
+                    <option value="sales">Sales (Pengelola & Follow-up Prospek)</option>
+                    <option value="admin">Admin (Monitoring & Master Data)</option>
+                </select>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
+                <button type="button" onclick="closeCreateUserModal()" class="btn-secondary">
+                    Batal
+                </button>
+                <button type="submit" class="btn-primary">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Daftarkan Pengguna
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Edit User Modal Dialog -->
 <div id="editUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm hidden">
     <div class="w-full max-w-md rounded-2xl bg-surface p-6 shadow-elev-4 border border-hairline transition-all">
@@ -213,6 +233,14 @@
 </div>
 
 <script>
+    function openCreateUserModal() {
+        document.getElementById('createUserModal').classList.remove('hidden');
+    }
+
+    function closeCreateUserModal() {
+        document.getElementById('createUserModal').classList.add('hidden');
+    }
+
     function openEditUserModal(id, name, email, role, isActive) {
         const modal = document.getElementById('editUserModal');
         const form = document.getElementById('editUserForm');

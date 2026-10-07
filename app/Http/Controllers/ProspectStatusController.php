@@ -52,4 +52,15 @@ class ProspectStatusController extends Controller
         return redirect()->route('master.statuses.index')
             ->with('success', 'Data status prospek berhasil diperbarui!');
     }
+    public function destroy(ProspectStatus $status): RedirectResponse
+    {
+        try {
+            $status->delete();
+            return redirect()->route('master.statuses.index')
+                ->with('success', 'Status prospek berhasil dihapus!');
+        } catch (\Exception $e) {
+            return redirect()->route('master.statuses.index')
+                ->with('error', 'Status tidak dapat dihapus karena masih terhubung dengan data prospek.');
+        }
+    }
 }

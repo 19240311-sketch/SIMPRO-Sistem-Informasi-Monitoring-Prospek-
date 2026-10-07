@@ -121,16 +121,22 @@
             @endif
 
             <!-- Action Buttons -->
-            <div class="flex items-center gap-2">
-                <button type="submit" class="btn-primary w-full justify-center">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />
+            <div class="flex w-full items-center gap-2">
+                <button type="submit" 
+                        class="flex-1 inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-[#0A4DF3] px-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#0639B8] hover:shadow active:scale-[0.98] border-2 border-[#0A4DF3] cursor-pointer">
+                    <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.539.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.378-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
                     </svg>
-                    Filter
+                    <span>Filter</span>
                 </button>
                 @if(request()->hasAny(['search', 'status_id', 'source_id', 'user_id', 'motorcycle_id', 'needs_follow_up']))
-                    <a href="{{ route('prospects.index') }}" class="btn-ghost whitespace-nowrap">
-                        ✕ Reset
+                    <a href="{{ route('prospects.index') }}" 
+                       class="flex-1 inline-flex h-10 items-center justify-center gap-1.5 rounded-md border-2 border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98] cursor-pointer"
+                       title="Reset filter ke kondisi awal">
+                        <svg class="h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                        <span>Reset</span>
                     </a>
                 @endif
             </div>
