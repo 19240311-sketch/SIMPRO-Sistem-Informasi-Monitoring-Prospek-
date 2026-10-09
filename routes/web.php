@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
     // Training / Knowledge Sales (Supporting Feature)
     Route::get('/trainings', [TrainingController::class, 'index'])->name('trainings.index');
     Route::get('/trainings/{training}', [TrainingController::class, 'show'])->name('trainings.show');
+    Route::post('/trainings/{training}/video-progress', [TrainingController::class, 'updateVideoProgress'])->name('trainings.video-progress');
     Route::post('/trainings/{training}/materials/{material}/complete', [TrainingController::class, 'completeMaterial'])->name('trainings.materials.complete');
     Route::get('/trainings/{training}/quiz', [TrainingController::class, 'quiz'])->name('trainings.quiz');
     Route::post('/trainings/{training}/quiz', [TrainingController::class, 'submitQuiz'])->name('trainings.quiz.submit');
@@ -92,12 +93,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
         Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
 
-        // Admin Training Management
+        // Admin Training Management (Kelola Materi Pembelajaran)
         Route::get('/admin/trainings', [AdminTrainingController::class, 'index'])->name('admin.trainings.index');
+        Route::get('/admin/trainings/create', [AdminTrainingController::class, 'create'])->name('admin.trainings.create');
         Route::post('/admin/trainings', [AdminTrainingController::class, 'store'])->name('admin.trainings.store');
+        Route::get('/admin/trainings/{training}/edit', [AdminTrainingController::class, 'edit'])->name('admin.trainings.edit');
         Route::get('/admin/trainings/{training}/manage', [AdminTrainingController::class, 'manage'])->name('admin.trainings.manage');
         Route::put('/admin/trainings/{training}', [AdminTrainingController::class, 'update'])->name('admin.trainings.update');
+        Route::patch('/admin/trainings/{training}/toggle', [AdminTrainingController::class, 'toggleStatus'])->name('admin.trainings.toggle');
         Route::delete('/admin/trainings/{training}', [AdminTrainingController::class, 'destroy'])->name('admin.trainings.destroy');
+        Route::post('/admin/trainings/generate-ai-questions', [AdminTrainingController::class, 'generateAiQuestions'])->name('admin.trainings.generate-ai-questions');
 
         Route::post('/admin/trainings/{training}/materials', [AdminTrainingController::class, 'storeMaterial'])->name('admin.trainings.materials.store');
         Route::put('/admin/trainings/{training}/materials/{material}', [AdminTrainingController::class, 'updateMaterial'])->name('admin.trainings.materials.update');

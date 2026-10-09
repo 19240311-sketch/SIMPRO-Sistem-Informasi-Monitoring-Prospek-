@@ -88,10 +88,13 @@
                                         Kelola Soal &amp; Hasil
                                     </a>
 
-                                    <form action="{{ route('admin.weekly-tests.destroy', $t->id) }}" method="POST" onsubmit="return confirm('Hapus tes mingguan ini beserta seluruh riwayat nilai?')">
+                                    <form id="delete-form-{{ $t->id }}" action="{{ route('admin.weekly-tests.destroy', $t->id) }}" method="POST" class="inline">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="rounded-lg px-2.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition" title="Hapus">
+                                        <button type="button"
+                                                onclick="openDeleteModal('{{ $t->id }}', '{{ addslashes($t->nama_tes) }}')"
+                                                class="rounded-lg px-2.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition cursor-pointer"
+                                                title="Hapus Tes">
                                             ✕
                                         </button>
                                     </form>
@@ -185,4 +188,163 @@
     </div>
 
 </div>
+
+<!-- MODAL KONFIRMASI HAPUS TES MINGGUAN -->
+<div id="customDeleteModal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <!-- Overlay hitam transparan sekitar 35%, tanpa efek blur -->
+    <div id="deleteModalBackdrop" 
+         onclick="closeDeleteModal()" 
+         class="fixed inset-0 bg-black/35 z-[1000] transition-opacity duration-200 opacity-0"></div>
+
+    <!-- Panel Modal: Posisi tepat di tengah layar horizontal & vertikal, rounded 18px -->
+    <div id="deleteModalPanel" 
+         class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1001] w-[calc(100%-32px)] max-w-md bg-white rounded-[18px] shadow-2xl border border-slate-100 p-5 sm:p-6 transition-all duration-200 opacity-0 scale-95 flex flex-col pointer-events-auto"
+         style="border-radius: 18px; max-height: calc(100vh - 40px);">
+        
+        <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            <!-- Ikon Peringatan Merah -->
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-50 border border-rose-100 text-rose-600">
+                <svg class="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+            </div>
+
+            <!-- Pesan dan Detail -->
+            <div class="flex-1 min-w-0 text-center sm:text-left">
+                <h3 class="text-base sm:text-lg font-bold text-slate-900" id="deleteModalTitle">
+                    Hapus Tes Mingguan?
+                </h3>
+                
+                <div class="mt-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-left">
+                    <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Tes yang akan dihapus:</span>
+                    <span class="text-xs sm:text-sm font-bold text-slate-900 break-words mt-0.5 block" id="deleteTestNameModal">-</span>
+                </div>
+
+                <p class="mt-3 text-xs sm:text-[13px] text-slate-600 leading-relaxed text-left">
+                    Apakah Anda yakin ingin menghapus tes ini beserta seluruh riwayat nilai dan hasil pengerjaan sales? Tindakan ini tidak dapat dibatalkan.
+                </p>
+
+                <!-- Box Notifikasi Error Jika Proses Gagal -->
+                <div id="deleteModalError" class="hidden mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium text-left"></div>
+            </div>
+        </div>
+
+        <!-- Tombol Aksi -->
+        <div class="mt-6 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pt-4 border-t border-slate-100">
+            <button type="button" 
+                    id="btnCancelDelete" 
+                    onclick="closeDeleteModal()" 
+                    class="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs sm:text-sm px-5 py-2.5 border border-slate-300 transition active:scale-95 cursor-pointer shadow-sm">
+                Batalkan
+            </button>
+            <button type="button" 
+                    id="btnConfirmDelete" 
+                    onclick="executeDelete()" 
+                    class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm px-5 py-2.5 shadow-sm transition active:scale-95 cursor-pointer">
+                Ya, Hapus Tes
+            </button>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    let currentDeleteId = null;
+    let isDeleting = false;
+
+    const deleteModal = document.getElementById('customDeleteModal');
+    const deleteBackdrop = document.getElementById('deleteModalBackdrop');
+    const deletePanel = document.getElementById('deleteModalPanel');
+    const deleteNameEl = document.getElementById('deleteTestNameModal');
+    const deleteErrorEl = document.getElementById('deleteModalError');
+    const btnConfirm = document.getElementById('btnConfirmDelete');
+    const btnCancel = document.getElementById('btnCancelDelete');
+
+    function openDeleteModal(id, testName) {
+        if (isDeleting) return;
+        currentDeleteId = id;
+        deleteNameEl.textContent = testName;
+        deleteErrorEl.classList.add('hidden');
+        deleteErrorEl.textContent = '';
+
+        // Reset button states
+        btnConfirm.disabled = false;
+        btnCancel.disabled = false;
+        btnConfirm.classList.remove('opacity-75', 'cursor-not-allowed');
+        btnConfirm.innerHTML = 'Ya, Hapus Tes';
+
+        deleteModal.classList.remove('hidden');
+
+        // Trigger smooth transition
+        requestAnimationFrame(() => {
+            deleteBackdrop.classList.remove('opacity-0');
+            deleteBackdrop.classList.add('opacity-100');
+            deletePanel.classList.remove('opacity-0', 'scale-95');
+            deletePanel.classList.add('opacity-100', 'scale-100');
+        });
+    }
+
+    function closeDeleteModal() {
+        if (isDeleting) return;
+
+        deleteBackdrop.classList.remove('opacity-100');
+        deleteBackdrop.classList.add('opacity-0');
+        deletePanel.classList.remove('opacity-100', 'scale-100');
+        deletePanel.classList.add('opacity-0', 'scale-95');
+
+        setTimeout(() => {
+            deleteModal.classList.add('hidden');
+            currentDeleteId = null;
+        }, 200);
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !deleteModal.classList.contains('hidden') && !isDeleting) {
+            closeDeleteModal();
+        }
+    });
+
+    function executeDelete() {
+        if (!currentDeleteId || isDeleting) return;
+
+        const form = document.getElementById('delete-form-' + currentDeleteId);
+        if (!form) return;
+
+        if (!navigator.onLine) {
+            deleteErrorEl.textContent = 'Tidak ada sambungan internet. Silakan periksa koneksi Anda.';
+            deleteErrorEl.classList.remove('hidden');
+            return;
+        }
+
+        // Kunci proses untuk mencegah penghapusan ganda
+        isDeleting = true;
+        btnConfirm.disabled = true;
+        btnCancel.disabled = true;
+        btnConfirm.classList.add('opacity-75', 'cursor-not-allowed');
+
+        // Tampilkan animasi loading
+        btnConfirm.innerHTML = `
+            <svg class="animate-spin -ml-0.5 mr-1.5 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Menghapus...</span>
+        `;
+
+        // Jalankan pengiriman form penghapusan
+        try {
+            form.submit();
+        } catch (err) {
+            deleteErrorEl.textContent = 'Terjadi kesalahan sistem saat memproses penghapusan.';
+            deleteErrorEl.classList.remove('hidden');
+            btnConfirm.disabled = false;
+            btnCancel.disabled = false;
+            btnConfirm.classList.remove('opacity-75', 'cursor-not-allowed');
+            btnConfirm.innerHTML = 'Ya, Hapus Tes';
+            isDeleting = false;
+        }
+    }
+</script>
+@endpush
 @endsection

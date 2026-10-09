@@ -7,6 +7,7 @@ use App\Models\TrainingMaterial;
 use App\Models\TrainingQuiz;
 use App\Models\UserQuizResult;
 use App\Models\UserTrainingProgress;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,15 +24,14 @@ class TrainingController extends Controller
         $tab = $request->query('kategori', 'all');
         $search = $request->query('q', '');
 
-        // Query all published trainings
-        $trainingsQuery = Training::with(['materials', 'quizzes'])
+        // Query all active and published trainings
+        $trainingsQuery = Training::with(['quizzes'])
             ->where('status', 'published')
+            ->where('is_active', true)
             ->orderBy('urutan', 'asc');
 
-        if ($tab === 'product_knowledge') {
-            $trainingsQuery->where('kategori', 'product_knowledge');
-        } elseif ($tab === 'sales_skill') {
-            $trainingsQuery->where('kategori', 'sales_skill');
+        if ($tab !== 'all' && !empty($tab)) {
+            $trainingsQuery->where('kategori', $tab);
         }
 
         if (!empty($search)) {
@@ -55,8 +55,15 @@ class TrainingController extends Controller
             ->groupBy('training_id')
             ->map(fn($group) => $group->first());
 
-        // "Kursus Saya": Trainings that user has interacted with (sedang_berjalan or selesai)
-        $myCourses = Training::with(['materials', 'quizzes'])
+        // Attach progress and latest quiz to all trainings
+        $allTrainings->transform(function ($training) use ($userProgresses, $userQuizResults) {
+            $training->progress = $userProgresses->get($training->id);
+            $training->latest_quiz = $userQuizResults->get($training->id);
+            return $training;
+        });
+
+        // "Kursus Saya": Trainings that user has interacted with
+        $myCourses = Training::with(['quizzes'])
             ->whereIn('id', $userProgresses->pluck('training_id'))
             ->get()
             ->map(function ($training) use ($userProgresses, $userQuizResults) {
@@ -66,16 +73,9 @@ class TrainingController extends Controller
             })
             ->sortByDesc(fn($t) => $t->progress->updated_at ?? now());
 
-        // Attach progress and latest quiz to all trainings
-        $allTrainings->transform(function ($training) use ($userProgresses, $userQuizResults) {
-            $training->progress = $userProgresses->get($training->id);
-            $training->latest_quiz = $userQuizResults->get($training->id);
-            return $training;
-        });
-
         // Summary Stats for user
-        $totalCompleted = $userProgresses->where('status', 'selesai')->count();
-        $totalInProgress = $userProgresses->where('status', 'sedang_berjalan')->count();
+        $totalCompleted = $userProgresses->where('status_lulus', true)->count();
+        $totalInProgress = $userProgresses->where('video_progress', '>', 0)->where('status_lulus', false)->count();
         $avgScore = $userQuizResults->count() > 0
             ? round($userQuizResults->avg('nilai'))
             : 0;
@@ -92,13 +92,12 @@ class TrainingController extends Controller
     }
 
     /**
-     * Show training detail and reader for materials.
+     * Show Video-based learning room for a training module.
      */
     public function show(Training $training, Request $request): View
     {
         $user = Auth::user();
-
-        $training->load(['materials', 'quizzes']);
+        $training->load(['quizzes']);
 
         // Get or initialize progress
         $progress = UserTrainingProgress::firstOrCreate(
@@ -107,46 +106,19 @@ class TrainingController extends Controller
                 'training_id' => $training->id,
             ],
             [
-                'completed_material_ids' => [],
-                'progress_persen' => 0,
+                'video_progress' => 0,
+                'video_completed' => false,
+                'waktu_mulai_video' => now(),
                 'status' => 'sedang_berjalan',
-                'waktu_mulai' => now(),
+                'tanggal_terakhir_belajar' => now(),
             ]
         );
 
-        if ($progress->status === 'belum_mulai') {
+        if (!$progress->waktu_mulai_video) {
             $progress->update([
-                'status' => 'sedang_berjalan',
-                'waktu_mulai' => $progress->waktu_mulai ?? now(),
+                'waktu_mulai_video' => now(),
+                'tanggal_terakhir_belajar' => now(),
             ]);
-        }
-
-        $completedIds = $progress->completed_material_ids ?? [];
-
-        // Determine active material
-        $materialId = $request->query('material_id');
-        $activeMaterial = null;
-
-        if ($materialId) {
-            $activeMaterial = $training->materials->firstWhere('id', (int)$materialId);
-        }
-
-        if (!$activeMaterial) {
-            // Find first incomplete material, or default to first material
-            $activeMaterial = $training->materials->first(fn($m) => !in_array($m->id, $completedIds))
-                ?? $training->materials->first();
-        }
-
-        // Get previous & next material for reader navigation
-        $prevMaterial = null;
-        $nextMaterial = null;
-
-        if ($activeMaterial) {
-            $currentIndex = $training->materials->search(fn($m) => $m->id === $activeMaterial->id);
-            if ($currentIndex !== false) {
-                $prevMaterial = $currentIndex > 0 ? $training->materials->get($currentIndex - 1) : null;
-                $nextMaterial = $currentIndex < ($training->materials->count() - 1) ? $training->materials->get($currentIndex + 1) : null;
-            }
         }
 
         $latestQuiz = UserQuizResult::where('user_id', $user->id)
@@ -157,79 +129,93 @@ class TrainingController extends Controller
         return view('trainings.show', compact(
             'training',
             'progress',
-            'completedIds',
-            'activeMaterial',
-            'prevMaterial',
-            'nextMaterial',
             'latestQuiz'
         ));
     }
 
     /**
-     * Mark a material as complete and recalculate progress.
+     * Realtime AJAX progress tracker from YouTube IFrame Player API.
      */
-    public function completeMaterial(Training $training, TrainingMaterial $material, Request $request): RedirectResponse
+    public function updateVideoProgress(Training $training, Request $request): JsonResponse
     {
         $user = Auth::user();
 
-        $progress = UserTrainingProgress::firstOrCreate(
-            ['user_id' => $user->id, 'training_id' => $training->id],
-            ['completed_material_ids' => [], 'status' => 'sedang_berjalan', 'waktu_mulai' => now()]
-        );
-
-        $completed = $progress->completed_material_ids ?? [];
-        if (!in_array($material->id, $completed)) {
-            $completed[] = $material->id;
-        }
-
-        $totalMaterials = max(1, $training->materials()->count());
-        $progressPercentage = min(100, round((count($completed) / $totalMaterials) * 100));
-
-        $hasQuizzes = $training->quizzes()->count() > 0;
-        $isCompleted = ($progressPercentage >= 100);
-
-        $progress->update([
-            'completed_material_ids' => array_values($completed),
-            'progress_persen' => $progressPercentage,
-            'last_material_id' => $material->id,
-            'status' => ($isCompleted && !$hasQuizzes) ? 'selesai' : ($progress->status === 'selesai' ? 'selesai' : 'sedang_berjalan'),
-            'waktu_selesai' => ($isCompleted && !$hasQuizzes && !$progress->waktu_selesai) ? now() : $progress->waktu_selesai,
+        $validated = $request->validate([
+            'progress' => 'required|numeric|min:0|max:100',
+            'completed' => 'nullable|boolean',
+            'current_time' => 'nullable|numeric',
+            'duration' => 'nullable|numeric',
         ]);
 
-        // Find next material or go to quiz
-        $allMaterials = $training->materials()->orderBy('urutan', 'asc')->get();
-        $nextMat = $allMaterials->first(fn($m) => !in_array($m->id, $completed));
+        $incomingProgress = round($validated['progress']);
+        $isCompleted = !empty($validated['completed']) || ($incomingProgress >= 100);
 
-        if ($nextMat) {
-            return redirect()->route('trainings.show', [$training->id, 'material_id' => $nextMat->id])
-                ->with('success', 'Materi "' . $material->judul_materi . '" selesai dipelajari! Lanjut ke materi berikutnya.');
+        $progress = UserTrainingProgress::firstOrCreate(
+            ['user_id' => $user->id, 'training_id' => $training->id],
+            [
+                'waktu_mulai_video' => now(),
+                'status' => 'sedang_berjalan',
+            ]
+        );
+
+        // Keep highest progress watched
+        $newProgress = max($progress->video_progress ?? 0, $incomingProgress);
+        $finalCompleted = ($progress->video_completed || $isCompleted || $newProgress >= 100);
+
+        $updates = [
+            'video_progress' => $newProgress,
+            'progress_persen' => $newProgress,
+            'tanggal_terakhir_belajar' => now(),
+        ];
+
+        if ($finalCompleted && !$progress->video_completed) {
+            $updates['video_completed'] = true;
+            $updates['waktu_selesai_video'] = now();
+            if (!$progress->status_lulus) {
+                $updates['status'] = 'video_selesai';
+            }
         }
 
-        if ($hasQuizzes) {
-            return redirect()->route('trainings.quiz', $training->id)
-                ->with('success', 'Selamat! Semua materi telah selesai. Mari uji pemahaman Anda dengan Quiz!');
-        }
+        $progress->update($updates);
 
-        return redirect()->route('trainings.show', $training->id)
-            ->with('success', 'Selamat! Anda telah menyelesaikan seluruh materi kursus ini.');
+        return response()->json([
+            'success' => true,
+            'video_progress' => $newProgress,
+            'video_completed' => $finalCompleted,
+            'can_take_quiz' => $finalCompleted,
+        ]);
     }
 
     /**
-     * Show quiz page for a training.
+     * Backward compatibility: Mark a material as complete.
+     */
+    public function completeMaterial(Training $training, TrainingMaterial $material, Request $request): RedirectResponse
+    {
+        return redirect()->route('trainings.show', $training->id);
+    }
+
+    /**
+     * Show quiz page for a training module (Security check: Video must be 100% completed).
      */
     public function quiz(Training $training): View|RedirectResponse
     {
         $user = Auth::user();
-        $training->load(['quizzes', 'materials']);
+        $training->load(['quizzes']);
 
         if ($training->quizzes->isEmpty()) {
             return redirect()->route('trainings.show', $training->id)
-                ->with('info', 'Belum ada quiz yang tersedia untuk training ini.');
+                ->with('info', 'Belum ada quiz yang tersedia untuk materi ini.');
         }
 
         $progress = UserTrainingProgress::where('user_id', $user->id)
             ->where('training_id', $training->id)
             ->first();
+
+        // Security check: sales must watch 100% video before taking quiz
+        if (!$progress || (!$progress->video_completed && ($progress->video_progress < 100))) {
+            return redirect()->route('trainings.show', $training->id)
+                ->with('warning', 'Harap selesaikan menonton video hingga 100% terlebih dahulu sebelum mengerjakan kuis pemahaman.');
+        }
 
         $latestResult = UserQuizResult::where('user_id', $user->id)
             ->where('training_id', $training->id)
@@ -240,12 +226,22 @@ class TrainingController extends Controller
     }
 
     /**
-     * Submit and grade the quiz.
+     * Submit and grade the quiz against passing grade.
      */
     public function submitQuiz(Training $training, Request $request): RedirectResponse
     {
         $user = Auth::user();
         $training->load('quizzes');
+
+        // Security check: video must be completed
+        $progress = UserTrainingProgress::where('user_id', $user->id)
+            ->where('training_id', $training->id)
+            ->first();
+
+        if (!$progress || (!$progress->video_completed && ($progress->video_progress < 100))) {
+            return redirect()->route('trainings.show', $training->id)
+                ->with('warning', 'Akses kuis ditolak: Video pembelajaran belum diselesaikan 100%.');
+        }
 
         $answers = $request->input('answers', []);
         $totalQuestions = $training->quizzes->count();
@@ -256,7 +252,7 @@ class TrainingController extends Controller
             $userAns = $answers[$quiz->id] ?? null;
             $isCorrect = false;
 
-            if ($userAns !== null && trim($userAns) === trim($quiz->jawaban_benar)) {
+            if ($userAns !== null && trim((string)$userAns) === trim((string)$quiz->jawaban_benar)) {
                 $isCorrect = true;
                 $correctCount++;
             }
@@ -270,7 +266,8 @@ class TrainingController extends Controller
         }
 
         $score = $totalQuestions > 0 ? round(($correctCount / $totalQuestions) * 100) : 100;
-        $passed = ($score >= 70);
+        $passingGrade = $training->passing_grade ?: 80;
+        $passed = ($score >= $passingGrade);
 
         // Save Quiz Result
         $result = UserQuizResult::create([
@@ -284,25 +281,37 @@ class TrainingController extends Controller
             'waktu_selesai' => now(),
         ]);
 
-        // If passed, mark training progress as 'selesai'
-        if ($passed) {
-            $progress = UserTrainingProgress::firstOrCreate(
-                ['user_id' => $user->id, 'training_id' => $training->id],
-                ['completed_material_ids' => $training->materials->pluck('id')->toArray(), 'status' => 'selesai']
-            );
+        // Update progress in database
+        $newAttempts = ($progress->jumlah_percobaan_kuis ?? 0) + 1;
+        $updates = [
+            'nilai_kuis' => $score,
+            'jumlah_percobaan_kuis' => $newAttempts,
+            'tanggal_terakhir_belajar' => now(),
+        ];
 
-            $progress->update([
-                'progress_persen' => 100,
-                'status' => 'selesai',
-                'waktu_selesai' => now(),
-            ]);
+        if ($passed) {
+            $updates['status_lulus'] = true;
+            $updates['status'] = 'selesai';
+            $updates['tanggal_lulus'] = now();
+            $updates['waktu_selesai'] = now();
+            $updates['progress_persen'] = 100;
+        } else {
+            $updates['status'] = 'belum_lulus';
         }
 
+        $progress->update($updates);
+
+        $flashType = $passed ? 'quiz_passed' : 'quiz_failed';
         $message = $passed
-            ? "Lulus! Nilai Quiz Anda: {$score}/100 ({$correctCount} Benar dari {$totalQuestions} Soal). Selamat!"
-            : "Nilai Quiz Anda: {$score}/100. Nilai kelulusan minimal 70. Anda dapat membaca ulang materi dan mencoba kembali.";
+            ? "Selamat! Anda dinyatakan LULUS dengan nilai {$score}% (Passing Grade: {$passingGrade}%)."
+            : "Nilai Anda {$score}% belum mencapai batas kelulusan {$passingGrade}%. Silakan ulangi kuis.";
 
         return redirect()->route('trainings.quiz', $training->id)
-            ->with($passed ? 'success' : 'warning', $message);
+            ->with($flashType, true)
+            ->with('score', $score)
+            ->with('correct_count', $correctCount)
+            ->with('total_questions', $totalQuestions)
+            ->with('passing_grade', $passingGrade)
+            ->with('message', $message);
     }
 }

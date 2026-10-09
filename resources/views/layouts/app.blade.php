@@ -127,7 +127,7 @@
                         <svg class="h-5 w-5 shrink-0 {{ request()->routeIs('admin.trainings.*') ? 'text-[#0A4DF3]' : 'text-slate-500 group-hover:text-slate-800' }}" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
                         </svg>
-                        <span>Kelola Training</span>
+                        <span>Kelola Materi Pembelajaran</span>
                     </a>
 
                     <!-- Kelola Tes Mingguan (Admin) -->
@@ -185,38 +185,14 @@
 
     <!-- Main Content Area -->
     <div class="flex flex-1 flex-col min-w-0 overflow-hidden">
-        <!-- Top Navbar -->
-        <header class="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-hairline bg-surface/95 px-4 sm:px-6 lg:px-8 backdrop-blur shadow-sm">
-            <div class="flex items-center gap-4">
-                <button type="button" class="lg:hidden text-slate-700 hover:text-[#0A4DF3] p-1.5 rounded-lg border border-slate-200" onclick="toggleSidebar()">
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                    </svg>
-                </button>
-                <h1 class="text-heading-md font-bold text-slate-900">@yield('page-title', 'Dashboard')</h1>
-            </div>
-
-            <div class="flex items-center gap-3">
-                <a href="{{ route('prospects.create') }}" class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0A4DF3] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#0639B8] hover:shadow-md active:scale-[0.98] border-2 border-[#0A4DF3] shadow-sm">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    <span class="hidden sm:inline">Tambah Prospek</span>
-                </a>
-
-                <!-- Profile Quick Link Button -->
-                <a href="{{ route('profile.show') }}" title="Profil Saya" class="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 transition border border-slate-200">
-                    @if(auth()->user()->foto_url)
-                        <img src="{{ auth()->user()->foto_url }}" alt="{{ auth()->user()->name }}" class="h-8 w-8 rounded-lg object-cover border border-blue-300">
-                    @else
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-[#0A4DF3] font-bold text-xs border border-blue-300">
-                            {{ auth()->user()->avatar_initials }}
-                        </div>
-                    @endif
-                    <span class="hidden md:inline text-xs font-bold text-slate-700 max-w-[120px] truncate pr-2">{{ auth()->user()->name }}</span>
-                </a>
-            </div>
-        </header>
+        <!-- Mobile-only Hamburger Menu (Hidden on Desktop) -->
+        <div class="lg:hidden sticky top-0 z-30 flex h-14 shrink-0 items-center border-b border-hairline bg-surface/95 px-4 backdrop-blur shadow-sm">
+            <button type="button" class="text-slate-700 hover:text-[#0A4DF3] p-1.5 rounded-lg border border-slate-200" onclick="toggleSidebar()">
+                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+            </button>
+        </div>
 
         <!-- Flash Messages / Toast Alerts -->
         @if(session('success'))

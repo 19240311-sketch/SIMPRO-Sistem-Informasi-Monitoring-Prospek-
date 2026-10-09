@@ -8,6 +8,7 @@ use App\Models\TrainingQuiz;
 use App\Models\User;
 use App\Models\UserQuizResult;
 use App\Models\UserTrainingProgress;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -21,10 +22,24 @@ class AdminTrainingController extends Controller
     public function index(Request $request): View
     {
         $activeTab = $request->query('tab', 'modules'); // 'modules' or 'sales_report'
+        $search = $request->query('q', '');
+        $kategoriFilter = $request->query('kategori', '');
 
-        $trainings = Training::withCount(['materials', 'quizzes', 'userProgresses'])
-            ->orderBy('urutan', 'asc')
-            ->get();
+        $trainingsQuery = Training::withCount(['materials', 'quizzes', 'userProgresses'])
+            ->orderBy('urutan', 'asc');
+
+        if (!empty($search)) {
+            $trainingsQuery->where(function ($q) use ($search) {
+                $q->where('nama_training', 'like', "%{$search}%")
+                  ->orWhere('deskripsi', 'like', "%{$search}%");
+            });
+        }
+
+        if (!empty($kategoriFilter)) {
+            $trainingsQuery->where('kategori', $kategoriFilter);
+        }
+
+        $trainings = $trainingsQuery->get();
 
         // Sales Report Data
         $salesUsers = User::where('peran', 'sales')
@@ -32,8 +47,8 @@ class AdminTrainingController extends Controller
             ->get();
 
         $salesProgressData = $salesUsers->map(function ($sales) use ($trainings) {
-            $completedCount = $sales->trainingProgresses->where('status', 'selesai')->count();
-            $inProgressCount = $sales->trainingProgresses->where('status', 'sedang_berjalan')->count();
+            $completedCount = $sales->trainingProgresses->where('status_lulus', true)->count();
+            $inProgressCount = $sales->trainingProgresses->where('video_progress', '>', 0)->where('status_lulus', false)->count();
             $totalTrainings = max(1, $trainings->count());
             $completionRate = round(($completedCount / $totalTrainings) * 100);
 
@@ -51,47 +66,219 @@ class AdminTrainingController extends Controller
             ];
         });
 
-        $totalTrainingsCount = $trainings->count();
-        $totalMaterialsCount = TrainingMaterial::count();
+        $totalTrainingsCount = Training::count();
         $totalQuizzesCount = TrainingQuiz::count();
-        $totalCompletions = UserTrainingProgress::where('status', 'selesai')->count();
+        $totalCompletions = UserTrainingProgress::where('status_lulus', true)->orWhere('status', 'selesai')->count();
 
         return view('admin.trainings.index', compact(
             'trainings',
             'salesProgressData',
             'activeTab',
+            'search',
+            'kategoriFilter',
             'totalTrainingsCount',
-            'totalMaterialsCount',
             'totalQuizzesCount',
             'totalCompletions'
         ));
     }
 
     /**
-     * Store new training.
+     * Show form to create new video & quiz training module.
+     */
+    public function create(): View
+    {
+        return view('admin.trainings.create');
+    }
+
+    /**
+     * Store new training module with YouTube video & quizzes.
      */
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'nama_training' => 'required|string|max:255',
-            'kategori' => 'required|in:product_knowledge,sales_skill',
+            'kategori' => 'required|string|in:product_knowledge,sales_skill,product_update,training,lainnya',
             'deskripsi' => 'required|string',
-            'estimasi_waktu' => 'nullable|string|max:50',
+            'youtube_url' => 'required|string|max:255',
+            'durasi_video' => 'nullable|string|max:50',
+            'jumlah_soal' => 'nullable|integer|min:1|max:20',
+            'passing_grade' => 'required|integer|min:10|max:100',
             'status' => 'required|in:published,draft',
+            'is_active' => 'nullable|boolean',
+            'quizzes' => 'nullable|array',
+            'quizzes.*.pertanyaan' => 'required|string',
+            'quizzes.*.pilihan_a' => 'required|string',
+            'quizzes.*.pilihan_b' => 'required|string',
+            'quizzes.*.pilihan_c' => 'required|string',
+            'quizzes.*.pilihan_d' => 'required|string',
+            'quizzes.*.jawaban_benar' => 'required|in:A,B,C,D',
+            'quizzes.*.penjelasan' => 'nullable|string',
         ]);
 
+        $videoId = Training::extractYouTubeId($validated['youtube_url']);
+        if (!$videoId) {
+            return back()->withInput()->withErrors(['youtube_url' => 'Link YouTube tidak valid. Harap masukkan tautan video YouTube yang benar.']);
+        }
+
         $maxUrutan = Training::max('urutan') ?? 0;
-        $validated['urutan'] = $maxUrutan + 1;
-        $validated['slug'] = Str::slug($validated['nama_training']) . '-' . Str::random(4);
 
-        $training = Training::create($validated);
+        $training = Training::create([
+            'nama_training' => $validated['nama_training'],
+            'kategori' => $validated['kategori'],
+            'deskripsi' => $validated['deskripsi'],
+            'youtube_url' => $validated['youtube_url'],
+            'youtube_video_id' => $videoId,
+            'thumbnail_url' => "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg",
+            'durasi_video' => $validated['durasi_video'] ?: 'Otomatis',
+            'jumlah_soal' => $validated['jumlah_soal'] ?: (isset($validated['quizzes']) ? count($validated['quizzes']) : 5),
+            'passing_grade' => $validated['passing_grade'] ?? 80,
+            'estimasi_waktu' => $validated['durasi_video'] ?: '15 Menit',
+            'status' => $validated['status'],
+            'is_active' => $request->has('is_active') ? $request->boolean('is_active') : true,
+            'urutan' => $maxUrutan + 1,
+            'slug' => Str::slug($validated['nama_training']) . '-' . Str::random(4),
+        ]);
 
-        return redirect()->route('admin.trainings.manage', $training->id)
-            ->with('success', 'Modul Training baru berhasil ditambahkan! Silakan tambahkan materi dan kuis.');
+        // Save Quizzes if provided
+        if (!empty($validated['quizzes'])) {
+            $order = 1;
+            foreach ($validated['quizzes'] as $qData) {
+                $optAId = (string) \Illuminate\Support\Str::uuid();
+                $optBId = (string) \Illuminate\Support\Str::uuid();
+                $optCId = (string) \Illuminate\Support\Str::uuid();
+                $optDId = (string) \Illuminate\Support\Str::uuid();
+
+                $choices = [
+                    ['id' => $optAId, 'text' => $qData['pilihan_a']],
+                    ['id' => $optBId, 'text' => $qData['pilihan_b']],
+                    ['id' => $optCId, 'text' => $qData['pilihan_c']],
+                    ['id' => $optDId, 'text' => $qData['pilihan_d']],
+                ];
+
+                $correctAnswer = match ($qData['jawaban_benar']) {
+                    'A' => $optAId,
+                    'B' => $optBId,
+                    'C' => $optCId,
+                    'D' => $optDId,
+                    default => $optAId,
+                };
+
+                TrainingQuiz::create([
+                    'training_id' => $training->id,
+                    'pertanyaan' => $qData['pertanyaan'],
+                    'pilihan_jawaban' => $choices,
+                    'jawaban_benar' => $correctAnswer,
+                    'penjelasan' => $qData['penjelasan'] ?? null,
+                    'urutan' => $order++,
+                ]);
+            }
+
+            // Sync jumlah_soal with actual questions count
+            $training->update(['jumlah_soal' => count($validated['quizzes'])]);
+        }
+
+        return redirect()->route('admin.trainings.index')
+            ->with('success', 'Materi pembelajaran "' . $training->nama_training . '" berhasil disimpan!');
     }
 
     /**
-     * Show Manage page (Materials & Quizzes) for a training.
+     * Show Edit form for training module.
+     */
+    public function edit(Training $training): View
+    {
+        $training->load('quizzes');
+        return view('admin.trainings.edit', compact('training'));
+    }
+
+    /**
+     * Update training module & synchronize quizzes.
+     */
+    public function update(Request $request, Training $training): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama_training' => 'required|string|max:255',
+            'kategori' => 'required|string|in:product_knowledge,sales_skill,product_update,training,lainnya',
+            'deskripsi' => 'required|string',
+            'youtube_url' => 'required|string|max:255',
+            'durasi_video' => 'nullable|string|max:50',
+            'jumlah_soal' => 'nullable|integer|min:1|max:20',
+            'passing_grade' => 'required|integer|min:10|max:100',
+            'status' => 'required|in:published,draft',
+            'is_active' => 'nullable|boolean',
+            'quizzes' => 'nullable|array',
+            'quizzes.*.pertanyaan' => 'required|string',
+            'quizzes.*.pilihan_a' => 'required|string',
+            'quizzes.*.pilihan_b' => 'required|string',
+            'quizzes.*.pilihan_c' => 'required|string',
+            'quizzes.*.pilihan_d' => 'required|string',
+            'quizzes.*.jawaban_benar' => 'required|in:A,B,C,D',
+            'quizzes.*.penjelasan' => 'nullable|string',
+        ]);
+
+        $videoId = Training::extractYouTubeId($validated['youtube_url']);
+        if (!$videoId) {
+            return back()->withInput()->withErrors(['youtube_url' => 'Link YouTube tidak valid. Harap masukkan tautan video YouTube yang benar.']);
+        }
+
+        $training->update([
+            'nama_training' => $validated['nama_training'],
+            'kategori' => $validated['kategori'],
+            'deskripsi' => $validated['deskripsi'],
+            'youtube_url' => $validated['youtube_url'],
+            'youtube_video_id' => $videoId,
+            'thumbnail_url' => "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg",
+            'durasi_video' => $validated['durasi_video'] ?: ($training->durasi_video ?: 'Otomatis'),
+            'jumlah_soal' => $validated['jumlah_soal'] ?: (isset($validated['quizzes']) ? count($validated['quizzes']) : 5),
+            'passing_grade' => $validated['passing_grade'] ?? 80,
+            'status' => $validated['status'],
+            'is_active' => $request->has('is_active') ? $request->boolean('is_active') : true,
+        ]);
+
+        // If quizzes are submitted, replace existing ones
+        if (isset($validated['quizzes'])) {
+            $training->quizzes()->delete();
+
+            $order = 1;
+            foreach ($validated['quizzes'] as $qData) {
+                $optAId = (string) \Illuminate\Support\Str::uuid();
+                $optBId = (string) \Illuminate\Support\Str::uuid();
+                $optCId = (string) \Illuminate\Support\Str::uuid();
+                $optDId = (string) \Illuminate\Support\Str::uuid();
+
+                $choices = [
+                    ['id' => $optAId, 'text' => $qData['pilihan_a']],
+                    ['id' => $optBId, 'text' => $qData['pilihan_b']],
+                    ['id' => $optCId, 'text' => $qData['pilihan_c']],
+                    ['id' => $optDId, 'text' => $qData['pilihan_d']],
+                ];
+
+                $correctAnswer = match ($qData['jawaban_benar']) {
+                    'A' => $optAId,
+                    'B' => $optBId,
+                    'C' => $optCId,
+                    'D' => $optDId,
+                    default => $optAId,
+                };
+
+                TrainingQuiz::create([
+                    'training_id' => $training->id,
+                    'pertanyaan' => $qData['pertanyaan'],
+                    'pilihan_jawaban' => $choices,
+                    'jawaban_benar' => $correctAnswer,
+                    'penjelasan' => $qData['penjelasan'] ?? null,
+                    'urutan' => $order++,
+                ]);
+            }
+
+            $training->update(['jumlah_soal' => count($validated['quizzes'])]);
+        }
+
+        return redirect()->route('admin.trainings.index')
+            ->with('success', 'Materi pembelajaran "' . $training->nama_training . '" berhasil diperbarui!');
+    }
+
+    /**
+     * Show Manage page (Materials & Quizzes) for backward compatibility.
      */
     public function manage(Training $training): View
     {
@@ -100,25 +287,19 @@ class AdminTrainingController extends Controller
     }
 
     /**
-     * Update training basic info.
+     * Toggle active/inactive status of training module.
      */
-    public function update(Request $request, Training $training): RedirectResponse
+    public function toggleStatus(Training $training): RedirectResponse
     {
-        $validated = $request->validate([
-            'nama_training' => 'required|string|max:255',
-            'kategori' => 'required|in:product_knowledge,sales_skill',
-            'deskripsi' => 'required|string',
-            'estimasi_waktu' => 'nullable|string|max:50',
-            'status' => 'required|in:published,draft',
-        ]);
+        $training->is_active = !$training->is_active;
+        $training->save();
 
-        $training->update($validated);
-
-        return back()->with('success', 'Informasi modul training berhasil diperbarui.');
+        $statusText = $training->is_active ? 'diaktifkan' : 'dinonaktifkan';
+        return back()->with('success', "Materi \"{$training->nama_training}\" berhasil {$statusText}.");
     }
 
     /**
-     * Delete training.
+     * Delete training module.
      */
     public function destroy(Training $training): RedirectResponse
     {
@@ -126,102 +307,8 @@ class AdminTrainingController extends Controller
         $training->delete();
 
         return redirect()->route('admin.trainings.index')
-            ->with('success', "Modul training \"{$nama}\" berhasil dihapus.");
+            ->with('success', "Materi pembelajaran \"{$nama}\" berhasil dihapus.");
     }
 
-    /**
-     * Add material to a training.
-     */
-    public function storeMaterial(Request $request, Training $training): RedirectResponse
-    {
-        $validated = $request->validate([
-            'judul_materi' => 'required|string|max:255',
-            'isi_materi' => 'required|string',
-        ]);
 
-        $maxUrutan = $training->materials()->max('urutan') ?? 0;
-        $validated['urutan'] = $maxUrutan + 1;
-        $validated['training_id'] = $training->id;
-
-        TrainingMaterial::create($validated);
-
-        return back()->with('success', 'Materi training berhasil ditambahkan!');
-    }
-
-    /**
-     * Update material.
-     */
-    public function updateMaterial(Request $request, Training $training, TrainingMaterial $material): RedirectResponse
-    {
-        $validated = $request->validate([
-            'judul_materi' => 'required|string|max:255',
-            'isi_materi' => 'required|string',
-        ]);
-
-        $material->update($validated);
-
-        return back()->with('success', 'Materi training berhasil diperbarui!');
-    }
-
-    /**
-     * Delete material.
-     */
-    public function destroyMaterial(Training $training, TrainingMaterial $material): RedirectResponse
-    {
-        $material->delete();
-        return back()->with('success', 'Materi berhasil dihapus.');
-    }
-
-    /**
-     * Add quiz question to a training.
-     */
-    public function storeQuiz(Request $request, Training $training): RedirectResponse
-    {
-        $validated = $request->validate([
-            'pertanyaan' => 'required|string',
-            'pilihan_a' => 'required|string',
-            'pilihan_b' => 'required|string',
-            'pilihan_c' => 'required|string',
-            'pilihan_d' => 'required|string',
-            'jawaban_benar' => 'required|string',
-            'penjelasan' => 'nullable|string',
-        ]);
-
-        $choices = [
-            $validated['pilihan_a'],
-            $validated['pilihan_b'],
-            $validated['pilihan_c'],
-            $validated['pilihan_d'],
-        ];
-
-        $correctAnswer = match ($validated['jawaban_benar']) {
-            'A' => $validated['pilihan_a'],
-            'B' => $validated['pilihan_b'],
-            'C' => $validated['pilihan_c'],
-            'D' => $validated['pilihan_d'],
-            default => $validated['pilihan_a'],
-        };
-
-        $maxUrutan = $training->quizzes()->max('urutan') ?? 0;
-
-        TrainingQuiz::create([
-            'training_id' => $training->id,
-            'pertanyaan' => $validated['pertanyaan'],
-            'pilihan_jawaban' => $choices,
-            'jawaban_benar' => $correctAnswer,
-            'penjelasan' => $validated['penjelasan'] ?? null,
-            'urutan' => $maxUrutan + 1,
-        ]);
-
-        return back()->with('success', 'Pertanyaan Quiz berhasil ditambahkan!');
-    }
-
-    /**
-     * Delete quiz question.
-     */
-    public function destroyQuiz(Training $training, TrainingQuiz $quiz): RedirectResponse
-    {
-        $quiz->delete();
-        return back()->with('success', 'Soal Quiz berhasil dihapus.');
-    }
 }
